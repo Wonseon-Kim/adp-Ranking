@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Running Ranking · 관리자</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title-row">
+      <h1>🔐 관리자</h1>
+      <a class="admin-link" href="index.html">← 랭킹으로</a>
+    </div>
+    <p class="sub">기록 추가 / 수정 / 삭제 (비밀번호 필요)</p>
+  </header>
+
+  <div id="gate" class="panel">
+    <label class="field">
+      <span>비밀번호</span>
+      <input type="password" id="password" placeholder="비밀번호 입력">
+    </label>
+    <button class="btn" id="unlock">확인</button>
+    <div class="error" id="gate-error"></div>
+  </div>
+
+  <div id="admin" class="panel" style="display:none">
+    <h2 class="section-title" id="form-title">기록 추가</h2>
+    <form id="record-form" class="form">
+      <input type="hidden" id="f-id">
+      <div class="form-row">
+        <label class="field">
+          <span>종목</span>
+          <select id="f-event">
+            <option value="10km">10km</option>
+            <option value="하프">하프</option>
+            <option value="풀">풀</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>이름</span>
+          <input type="text" id="f-name" required placeholder="예: 김지훈">
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label class="field">
+          <span>기록 (시:분:초)</span>
+          <input type="text" id="f-time" required placeholder="예: 0:42:15">
+        </label>
+        <label class="field">
+          <span>날짜</span>
+          <input type="date" id="f-date">
+        </label>
+      </div>
+
+      <label class="field">
+        <span>대회명</span>
+        <input type="text" id="f-race" placeholder="예: 서울마라톤">
+      </label>
+
+      <label class="field">
+        <span>아이콘</span>
+        <input type="text" id="f-icon" placeholder="원하는 이모지를 자유롭게 입력하세요 (예: 🐯, 🏔️, 🍜)" maxlength="8">
+      </label>
+      <div class="hint">💡 이모지 키보드 열기 — Mac: <code>Control+Command+Space</code> · Windows: <code>Win+.</code> (마침표) · 모바일: 키보드의 😀 버튼 · 또는 아래에서 빠르게 선택:</div>
+      <div class="picker-row" id="icon-picker"></div>
+
+      <label class="field photo-upload">
+        <span>대회 사진 (가로로 긴 사진 권장 — 카드 오른쪽에 은은하게 표시됩니다)</span>
+        <input type="file" id="f-photo-file" accept="image/*">
+      </label>
+      <input type="hidden" id="f-photo-url">
+      <input type="hidden" id="f-photo-pos-x" value="100">
+      <input type="hidden" id="f-photo-pos-y" value="50">
+      <div class="photo-preview-wrap" id="photo-preview" style="display:none">
+        <div class="crop-stage" id="crop-stage">
+          <img id="crop-img" alt="" draggable="false">
+          <div class="crop-fade"></div>
+        </div>
+        <div class="hint">🖱️ 사진을 드래그해서 카드에 보일 위치를 맞춰보세요 (실제 표시될 그대로 미리보기)</div>
+        <button type="button" class="btn-secondary" id="photo-remove">사진 제거</button>
+      </div>
+      <div class="error" id="photo-error"></div>
+      <div id="photo-uploading" class="hint" style="display:none">⏳ 업로드 중… (사진 크기에 따라 몇 초 걸릴 수 있어요)</div>
+
+      <div class="hint" id="photo-preset-hint" style="display:none">📷 같은 대회 사진 재사용 (새로 업로드하지 않고 클릭해서 바로 사용):</div>
+      <div class="picker-row" id="photo-presets"></div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn" id="submit-btn">기록 추가</button>
+        <button type="button" class="btn-secondary" id="cancel-edit" style="display:none">취소</button>
+      </div>
+      <div class="error" id="add-error"></div>
+    </form>
+
+    <h2 class="section-title">등록된 기록</h2>
+    <div class="list" id="admin-list"></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="theme.js"></script>
+<script>
+  let PASSWORD = "";
+  let records = [];
+  const gateEl = document.getElementById("gate");
+  const adminEl = document.getElementById("admin");
+  const gateError = document.getElementById("gate-error");
+  const addError = document.getElementById("add-error");
+  const adminListEl = document.getElementById("admin-list");
+  const form = document.getElementById("record-form");
+  const formTitle = document.getElementById("form-title");
+  const submitBtn = document.getElementById("submit-btn");
+  const cancelEditBtn = document.getElementById("cancel-edit");
+  const iconInput = document.getElementById("f-icon");
+  const iconPicker = document.getElementById("icon-picker");
+  const photoFileInput = document.getElementById("f-photo-file");
+  const photoUrlInput = document.getElementById("f-photo-url");
+  const photoPreview = document.getElementById("photo-preview");
+  const photoRemoveBtn = document.getElementById("photo-remove");
+  const photoError = document.getElementById("photo-error");
+  const photoUploading = document.getElementById("photo-uploading");
+  const photoPosXInput = document.getElementById("f-photo-pos-x");
+  const photoPosYInput = document.getElementById("f-photo-pos-y");
+  const cropStage = document.getElementById("crop-stage");
+  const cropImg = document.getElementById("crop-img");
+
+  iconPicker.innerHTML = ICON_CHOICES.map(
+    ic => `<button type="button" class="icon-btn" data-icon="${ic}">${ic}</button>`
+  ).join("");
+  iconPicker.querySelectorAll(".icon-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      iconInput.value = btn.dataset.icon;
+      iconPicker.querySelectorAll(".icon-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+    });
+  });
+
+  // ---- 사진 드래그 위치 조정 (crop stage) ----
+  const cropState = { natW: 0, natH: 0, overflowX: 0, overflowY: 0, tx: 0, ty: 0 };
+  let dragging = false, dragStartX = 0, dragStartY = 0, startTx = 0, startTy = 0;
+
+  function layoutCropImage() {
+    const stageW = cropStage.clientWidth;
+    const stageH = cropStage.clientHeight;
+    if (!cropState.natW || !stageW) return;
+    const scale = Math.max(stageW / cropState.natW, stageH / cropState.natH);
+    const renderedW = cropState.natW * scale;
+    const renderedH = cropState.natH * scale;
+    cropState.overflowX = Math.max(0, renderedW - stageW);
+    cropState.overflowY = Math.max(0, renderedH - stageH);
+    cropImg.style.width = renderedW + "px";
+    cropImg.style.height = renderedH + "px";
+  }
+
+  function applyCropTransform() {
+    cropImg.style.transform = `translate(${cropState.tx}px, ${cropState.ty}px)`;
+  }
+
+  function setCropFromPercent(px, py) {
+    cropState.tx = -(cropState.overflowX * (px / 100));
+    cropState.ty = -(cropState.overflowY * (py / 100));
+    applyCropTransform();
+  }
+
+  function syncCropPercentToInputs() {
+    const px = cropState.overflowX > 0 ? Math.round((-cropState.tx / cropState.overflowX) * 100) : 50;
+    const py = cropState.overflowY > 0 ? Math.round((-cropState.ty / cropState.overflowY) * 100) : 50;
+    photoPosXInput.value = px;
+    photoPosYInput.value = py;
+  }
+
+  function loadCropImage(url, posX, posY) {
+    return new Promise((resolve, reject) => {
+      cropImg.onload = () => {
+        cropState.natW = cropImg.naturalWidth;
+        cropState.natH = cropImg.naturalHeight;
+        // display:block이 막 적용된 직후라 레이아웃이 안 잡혀 clientWidth가 0으로 읽힐 수 있어
+        // 두 번의 rAF로 브라우저가 레이아웃을 확정할 때까지 기다린 뒤 계산합니다.
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          layoutCropImage();
+          setCropFromPercent(
+            posX === undefined || posX === "" || isNaN(posX) ? 100 : Number(posX),
+            posY === undefined || posY === "" || isNaN(posY) ? 50 : Number(posY)
+          );
+          syncCropPercentToInputs();
+          resolve();
+        }));
+      };
+      cropImg.onerror = () => reject(new Error("image_load_failed"));
+      cropImg.src = url;
+    });
+  }
+
+  window.addEventListener("resize", () => {
+    if (!cropState.natW) return;
+    const curX = Number(photoPosXInput.value) || 100;
+    const curY = Number(photoPosYInput.value) || 50;
+    layoutCropImage();
+    setCropFromPercent(curX, curY);
+  });
+
+  cropStage.addEventListener("pointerdown", e => {
+    if (!cropState.natW) return;
+    dragging = true;
+    cropStage.classList.add("dragging");
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    startTx = cropState.tx;
+    startTy = cropState.ty;
+    cropStage.setPointerCapture(e.pointerId);
+  });
+  cropStage.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    cropState.tx = Math.min(0, Math.max(-cropState.overflowX, startTx + (e.clientX - dragStartX)));
+    cropState.ty = Math.min(0, Math.max(-cropState.overflowY, startTy + (e.clientY - dragStartY)));
+    applyCropTransform();
+    syncCropPercentToInputs();
+  });
+  function endDrag() {
+    dragging = false;
+    cropStage.classList.remove("dragging");
+  }
+  cropStage.addEventListener("pointerup", endDrag);
+  cropStage.addEventListener("pointercancel", endDrag);
+  cropStage.addEventListener("pointerleave", endDrag);
+
+  async function showPhoto(url, posX, posY) {
+    photoUrlInput.value = url || "";
+    if (url) {
+      photoPreview.style.display = "block";
+      try {
+        await loadCropImage(url, posX, posY);
+      } catch {
+        photoError.textContent = "사진 미리보기를 불러오지 못했습니다.";
+      }
+    } else {
+      cropImg.src = "";
+      cropState.natW = 0;
+      photoPosXInput.value = 100;
+      photoPosYInput.value = 50;
+      photoPreview.style.display = "none";
+    }
+  }
+
+  function resizeImageFile(file, maxWidth) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("read_failed"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("decode_failed"));
+        img.onload = () => {
+          const scale = Math.min(1, maxWidth / img.width);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  photoFileInput.addEventListener("change", async () => {
+    const file = photoFileInput.files[0];
+    if (!file) return;
+    photoError.textContent = "";
+    photoFileInput.disabled = true;
+    photoUploading.style.display = "block";
+    try {
+      const dataUrl = await resizeImageFile(file, 1400);
+      const base64 = dataUrl.split(",")[1];
+      const data = await callApi({
+        password: PASSWORD,
+        action: "uploadImage",
+        filename: file.name,
+        mimeType: "image/jpeg",
+        dataBase64: base64,
+      });
+      if (!data.ok) {
+        if (data.error === "unauthorized") return relock();
+        photoError.textContent = "업로드 실패: " + data.error;
+        return;
+      }
+      await showPhoto(data.url);
+    } catch (err) {
+      photoError.textContent = "이미지를 처리하지 못했습니다: " + (err && err.message ? err.message : err);
+    } finally {
+      photoUploading.style.display = "none";
+      photoFileInput.disabled = false;
+      photoFileInput.value = "";
+    }
+  });
+
+  photoRemoveBtn.addEventListener("click", () => showPhoto(""));
+
+  async function callApi(payload) {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  }
+
+  async function unlock() {
+    gateError.textContent = "";
+    const pw = document.getElementById("password").value;
+    if (!pw) return;
+    const unlockBtn = document.getElementById("unlock");
+    unlockBtn.disabled = true;
+    try {
+      const data = await callApi({ password: pw, action: "check" });
+      if (!data.ok) {
+        gateError.textContent = "비밀번호가 올바르지 않습니다.";
+        return;
+      }
+      PASSWORD = pw;
+      gateEl.style.display = "none";
+      adminEl.style.display = "block";
+      loadList();
+    } catch {
+      gateError.textContent = "확인 중 오류가 발생했습니다.";
+    } finally {
+      unlockBtn.disabled = false;
+    }
+  }
+
+  function relock(message) {
+    PASSWORD = "";
+    adminEl.style.display = "none";
+    gateEl.style.display = "block";
+    gateError.textContent = message || "비밀번호가 올바르지 않습니다.";
+  }
+
+  function resetForm() {
+    form.reset();
+    document.getElementById("f-id").value = "";
+    iconPicker.querySelectorAll(".icon-btn").forEach(b => b.classList.remove("selected"));
+    showPhoto("");
+    formTitle.textContent = "기록 추가";
+    submitBtn.textContent = "기록 추가";
+    cancelEditBtn.style.display = "none";
+    addError.textContent = "";
+    photoError.textContent = "";
+  }
+
+  function startEdit(r) {
+    document.getElementById("f-id").value = r.id;
+    document.getElementById("f-event").value = r.event;
+    document.getElementById("f-name").value = r.name;
+    document.getElementById("f-time").value = r.time;
+    document.getElementById("f-date").value = r.date || "";
+    document.getElementById("f-race").value = r.race || "";
+    iconInput.value = r.icon || "";
+    const hasPhoto = r.photo && /^https?:\/\//.test(r.photo);
+    showPhoto(hasPhoto ? r.photo : "", hasPhoto ? r.photoPosition : 100, hasPhoto ? r.photoPositionY : 50);
+    formTitle.textContent = "기록 수정";
+    submitBtn.textContent = "수정 저장";
+    cancelEditBtn.style.display = "inline-block";
+    addError.textContent = "";
+    photoError.textContent = "";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  cancelEditBtn.addEventListener("click", resetForm);
+
+  function renderPhotoPresets() {
+    const presetHint = document.getElementById("photo-preset-hint");
+    const presetWrap = document.getElementById("photo-presets");
+    const seen = new Map();
+    records.forEach(r => {
+      if (r.photo && /^https?:\/\//.test(r.photo) && !seen.has(r.photo)) {
+        seen.set(r.photo, r.race || r.name);
+      }
+    });
+    const entries = [...seen.entries()];
+    if (entries.length === 0) {
+      presetHint.style.display = "none";
+      presetWrap.innerHTML = "";
+      return;
+    }
+    presetHint.style.display = "block";
+    presetWrap.innerHTML = entries.map(([url, label]) => `
+      <button type="button" class="photo-preset-btn" data-url="${url}" title="${label}">
+        <img src="${url}" alt="${label}" loading="lazy">
+      </button>
+    `).join("");
+    presetWrap.querySelectorAll(".photo-preset-btn").forEach(btn => {
+      btn.addEventListener("click", () => showPhoto(btn.dataset.url, 100, 50));
+    });
+  }
+
+  async function loadList() {
+    adminListEl.innerHTML = '<div class="empty">불러오는 중…</div>';
+    try {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      if (!data.ok) throw new Error();
+      records = data.records;
+      renderPhotoPresets();
+      if (records.length === 0) {
+        adminListEl.innerHTML = '<div class="empty">등록된 기록이 없습니다.</div>';
+        return;
+      }
+      adminListEl.innerHTML = records.map(r => `
+        <div class="row admin-row">
+          <div class="who">
+            <div class="name">${r.icon || DEFAULT_ICON} ${r.name} <span class="tag">${r.event}</span></div>
+            <div class="meta">${[r.race, r.date].filter(Boolean).join(" · ") || "기록"}</div>
+          </div>
+          <div class="score"><div class="time">${r.time}</div></div>
+          <div class="admin-row-actions">
+            <button class="btn-edit" data-id="${r.id}">수정</button>
+            <button class="btn-del" data-id="${r.id}">삭제</button>
+          </div>
+        </div>
+      `).join("");
+
+      adminListEl.querySelectorAll(".btn-del").forEach(btn => {
+        btn.addEventListener("click", () => deleteRecord(btn.dataset.id));
+      });
+      adminListEl.querySelectorAll(".btn-edit").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const r = records.find(rec => rec.id === btn.dataset.id);
+          if (r) startEdit(r);
+        });
+      });
+    } catch {
+      adminListEl.innerHTML = '<div class="empty">목록을 불러오지 못했습니다.</div>';
+    }
+  }
+
+  async function deleteRecord(id) {
+    if (!confirm("이 기록을 삭제할까요?")) return;
+    const data = await callApi({ password: PASSWORD, action: "delete", id });
+    if (!data.ok) {
+      if (data.error === "unauthorized") return relock();
+      alert("삭제 실패: " + data.error);
+      return;
+    }
+    loadList();
+  }
+
+  document.getElementById("unlock").addEventListener("click", unlock);
+  document.getElementById("password").addEventListener("keydown", e => {
+    if (e.key === "Enter") unlock();
+  });
+
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    addError.textContent = "";
+    const id = document.getElementById("f-id").value;
+    const record = {
+      event: document.getElementById("f-event").value,
+      name: document.getElementById("f-name").value.trim(),
+      time: document.getElementById("f-time").value.trim(),
+      race: document.getElementById("f-race").value.trim(),
+      date: document.getElementById("f-date").value,
+      icon: iconInput.value.trim(),
+      photo: photoUrlInput.value,
+      photoPosition: photoUrlInput.value ? photoPosXInput.value : "",
+      photoPositionY: photoUrlInput.value ? photoPosYInput.value : "",
+    };
+    if (!record.name || !record.time) {
+      addError.textContent = "이름과 기록은 필수입니다.";
+      return;
+    }
+    const payload = id
+      ? { password: PASSWORD, action: "update", id, record }
+      : { password: PASSWORD, action: "add", record };
+    const data = await callApi(payload);
+    if (!data.ok) {
+      if (data.error === "unauthorized") return relock();
+      addError.textContent = "저장 실패: " + data.error;
+      return;
+    }
+    resetForm();
+    loadList();
+  });
+</script>
+</body>
+</html>

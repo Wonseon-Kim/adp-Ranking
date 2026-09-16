@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Running Ranking</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title-row">
+      <h1>🏃 Running Ranking</h1>
+      <a class="admin-link" href="admin.html">관리자</a>
+    </div>
+    <p class="sub">10km · 하프 · 풀코스 종목별 기록 순위</p>
+    <div class="notice">⚠️ 공식 대회 기록만 인정됩니다 (개인 GPS·워치 기록은 제외)</div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="list" id="list"></div>
+</div>
+
+<script src="config.js"></script>
+<script src="theme.js"></script>
+<script>
+  const EVENTS = Object.keys(DISTANCES_KM);
+  const tabsEl = document.getElementById("tabs");
+  const listEl = document.getElementById("list");
+  let RECORDS = { "10km": [], "하프": [], "풀": [] };
+  let currentEvent = EVENTS[0];
+
+  function timeToSeconds(t) {
+    const parts = String(t).split(":").map(Number);
+    while (parts.length < 3) parts.unshift(0);
+    const [h, m, s] = parts;
+    return h * 3600 + m * 60 + s;
+  }
+
+  function formatPace(totalSeconds, distanceKm) {
+    const secPerKm = totalSeconds / distanceKm;
+    const m = Math.floor(secPerKm / 60);
+    const s = Math.round(secPerKm % 60);
+    return `${m}:${String(s).padStart(2, "0")}/km`;
+  }
+
+  const RANK_DECOR = {
+    1: { badge: "👑" },
+    2: { badge: "🥈" },
+    3: { badge: "🥉" },
+  };
+
+  function render(event) {
+    currentEvent = event;
+    tabsEl.querySelectorAll(".tab").forEach(el => {
+      el.classList.toggle("active", el.dataset.event === event);
+    });
+
+    const distanceKm = DISTANCES_KM[event];
+    const records = [...(RECORDS[event] || [])].sort(
+      (a, b) => timeToSeconds(a.time) - timeToSeconds(b.time)
+    );
+
+    if (records.length === 0) {
+      listEl.innerHTML = '<div class="empty">아직 등록된 기록이 없습니다.</div>';
+      return;
+    }
+
+    listEl.innerHTML = records.map((r, i) => {
+      const rank = i + 1;
+      const seconds = timeToSeconds(r.time);
+      const pace = formatPace(seconds, distanceKm);
+      const icon = r.icon || DEFAULT_ICON;
+      const meta = [r.race, r.date].filter(Boolean).join(" · ");
+      const decor = RANK_DECOR[rank];
+      const topClass = rank <= 3 ? ` top top${rank}` : "";
+      const photoUrl = r.photo && /^https?:\/\//.test(r.photo) ? r.photo : "";
+      const photoVar = photoUrl ? `url('${photoUrl.replace(/'/g, "%27")}')` : "none";
+      const photoPosX = photoUrl && r.photoPosition !== "" && !isNaN(r.photoPosition) ? `${r.photoPosition}%` : "100%";
+      const photoPosY = photoUrl && r.photoPositionY !== "" && !isNaN(r.photoPositionY) ? `${r.photoPositionY}%` : "50%";
+
+      return `
+        <div class="row${topClass}" style="--row-photo:${photoVar}; --row-photo-pos-x:${photoPosX}; --row-photo-pos-y:${photoPosY}">
+          <div class="rank-badge">${decor ? decor.badge : rank}</div>
+          <div class="who">
+            <div class="name">${r.name}</div>
+            <div class="meta">${icon} ${meta || "기록"}</div>
+          </div>
+          <div class="score">
+            <div class="time">${r.time}</div>
+            <div class="pace">${pace}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  tabsEl.innerHTML = EVENTS.map(
+    e => `<div class="tab" data-event="${e}">${e}</div>`
+  ).join("");
+
+  tabsEl.querySelectorAll(".tab").forEach(el => {
+    el.addEventListener("click", () => render(el.dataset.event));
+  });
+
+  async function loadRecords() {
+    if (!API_URL || API_URL.includes("PASTE_YOUR_WEB_APP_URL_HERE")) {
+      listEl.innerHTML = '<div class="empty">config.js에 API_URL이 아직 설정되지 않았습니다.</div>';
+      return;
+    }
+    listEl.innerHTML = '<div class="empty">불러오는 중…</div>';
+    try {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "load_failed");
+
+      RECORDS = { "10km": [], "하프": [], "풀": [] };
+      data.records.forEach(r => {
+        if (!RECORDS[r.event]) RECORDS[r.event] = [];
+        RECORDS[r.event].push(r);
+      });
+
+      // 기록이 가장 많이 등록된 종목을 먼저 보여줍니다.
+      const busiestEvent = EVENTS.reduce((best, e) =>
+        RECORDS[e].length > RECORDS[best].length ? e : best
+      , EVENTS[0]);
+
+      render(busiestEvent);
+    } catch (err) {
+      listEl.innerHTML = '<div class="empty">기록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</div>';
+    }
+  }
+
+  loadRecords();
+</script>
+</body>
+</html>
