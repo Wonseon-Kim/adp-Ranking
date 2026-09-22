@@ -29,10 +29,6 @@
   const listEl = document.getElementById("list");
   let RECORDS = { "10km": [], "하프": [], "풀": [] };
   let currentEvent = EVENTS[0];
-  let hasUserSelectedEvent = false;
-
-  // 두 번째 방문부터는 직전 랭킹을 즉시 띄우기 위한 브라우저 캐시입니다.
-  const LOCAL_CACHE_KEY = "running-ranking-records-v1";
 
   function timeToSeconds(t) {
     const parts = String(t).split(":").map(Number);
@@ -48,47 +44,11 @@
     return `${m}:${String(s).padStart(2, "0")}/km`;
   }
 
-  function escapeHtml(value) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  // 외부 이미지 파일 없이 HTML 안에서 바로 그리는 메달 SVG입니다.
-  // 그래서 GitHub에는 별도 png 파일을 추가할 필요가 없습니다.
-  function medalSvg(rank) {
-    const crown = rank === 1
-      ? '<path class="crown" d="M21 11.5l4 4 4-6 4 6 4-4-1.8 8.2H22.8L21 11.5z" />'
-      : '';
-
-    return `
-      <svg class="medal-svg" viewBox="0 0 58 58" role="img" aria-label="${rank}위 메달">
-        <path class="ribbon" d="M20 3h9l-2.2 18h-9z" />
-        <path class="ribbon ribbon-dark" d="M29 3h9l2.2 18h-9z" />
-        ${crown}
-        <path class="laurel" d="M14.5 27c-5 4.3-6.2 12.1-1.4 18.2 2.4 3 5.6 5 9.1 5.8M43.5 27c5 4.3 6.2 12.1 1.4 18.2-2.4 3-5.6 5-9.1 5.8" />
-        <path class="laurel" d="M12.6 31.2l-4.1-1.4M11.2 36.3l-4.4.2M12.1 41.3l-4 1.7M15.2 45.6l-3.2 3M45.4 31.2l4.1-1.4M46.8 36.3l4.4.2M45.9 41.3l4 1.7M42.8 45.6l3.2 3" />
-        <circle class="medal-face" cx="29" cy="35" r="14.2" />
-        <circle class="medal-ring" cx="29" cy="35" r="14.2" />
-        <text class="medal-number" x="29" y="35.5">${rank}</text>
-      </svg>`;
-  }
-
-  function renderTabs() {
-    tabsEl.innerHTML = EVENTS.map(
-      e => `<div class="tab" data-event="${e}">${e}</div>`
-    ).join("");
-
-    tabsEl.querySelectorAll(".tab").forEach(el => {
-      el.addEventListener("click", () => {
-        hasUserSelectedEvent = true;
-        render(el.dataset.event);
-      });
-    });
-  }
+  const RANK_DECOR = {
+    1: { badge: "👑" },
+    2: { badge: "🥈" },
+    3: { badge: "🥉" },
+  };
 
   function render(event) {
     currentEvent = event;
@@ -110,10 +70,10 @@
       const rank = i + 1;
       const seconds = timeToSeconds(r.time);
       const pace = formatPace(seconds, distanceKm);
-      const icon = escapeHtml(r.icon || DEFAULT_ICON);
-      const meta = [r.race, r.date].filter(Boolean).map(escapeHtml).join(" · ");
+      const icon = r.icon || DEFAULT_ICON;
+      const meta = [r.race, r.date].filter(Boolean).join(" · ");
+      const decor = RANK_DECOR[rank];
       const topClass = rank <= 3 ? ` top top${rank}` : "";
-      const badge = rank <= 3 ? medalSvg(rank) : rank;
       const photoUrl = r.photo && /^https?:\/\//.test(r.photo) ? r.photo : "";
       const photoVar = photoUrl ? `url('${photoUrl.replace(/'/g, "%27")}')` : "none";
       const photoPosX = photoUrl && r.photoPosition !== "" && !isNaN(r.photoPosition) ? `${r.photoPosition}%` : "100%";
@@ -121,13 +81,13 @@
 
       return `
         <div class="row${topClass}" style="--row-photo:${photoVar}; --row-photo-pos-x:${photoPosX}; --row-photo-pos-y:${photoPosY}">
-          <div class="rank-badge">${badge}</div>
+          <div class="rank-badge">${decor ? decor.badge : rank}</div>
           <div class="who">
-            <div class="name">${escapeHtml(r.name)}</div>
+            <div class="name">${r.name}</div>
             <div class="meta">${icon} ${meta || "기록"}</div>
           </div>
           <div class="score">
-            <div class="time">${escapeHtml(r.time)}</div>
+            <div class="time">${r.time}</div>
             <div class="pace">${pace}</div>
           </div>
         </div>
@@ -135,89 +95,43 @@
     }).join("");
   }
 
-  function groupRecords(records) {
-    const grouped = { "10km": [], "하프": [], "풀": [] };
-    (records || []).forEach(r => {
-      if (!grouped[r.event]) grouped[r.event] = [];
-      grouped[r.event].push(r);
-    });
-    return grouped;
-  }
+  tabsEl.innerHTML = EVENTS.map(
+    e => `<div class="tab" data-event="${e}">${e}</div>`
+  ).join("");
 
-  function getBusiestEvent() {
-    return EVENTS.reduce((best, e) =>
-      RECORDS[e].length > RECORDS[best].length ? e : best
-    , EVENTS[0]);
-  }
+  tabsEl.querySelectorAll(".tab").forEach(el => {
+    el.addEventListener("click", () => render(el.dataset.event));
+  });
 
-  function readLocalCache() {
-    try {
-      const raw = localStorage.getItem(LOCAL_CACHE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed.records) ? parsed.records : null;
-    } catch {
-      return null;
-    }
-  }
-
-  function writeLocalCache(records) {
-    try {
-      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({
-        savedAt: Date.now(),
-        records
-      }));
-    } catch {
-      // 브라우저 저장 공간이 막혀 있어도 사이트 자체는 정상 동작합니다.
-    }
-  }
-
-  function applyRecords(records, { keepCurrentEvent = false } = {}) {
-    RECORDS = groupRecords(records);
-    const eventToRender = keepCurrentEvent && EVENTS.includes(currentEvent)
-      ? currentEvent
-      : getBusiestEvent();
-    render(eventToRender);
-  }
-
-  async function loadRecords({ hasCachedScreen = false } = {}) {
+  async function loadRecords() {
     if (!API_URL || API_URL.includes("PASTE_YOUR_WEB_APP_URL_HERE")) {
       listEl.innerHTML = '<div class="empty">config.js에 API_URL이 아직 설정되지 않았습니다.</div>';
       return;
     }
-
-    if (!hasCachedScreen) {
-      listEl.innerHTML = '<div class="empty">불러오는 중…</div>';
-    }
-
+    listEl.innerHTML = '<div class="empty">불러오는 중…</div>';
     try {
-      // 뒤에서는 항상 최신 API 응답을 확인합니다.
-      const res = await fetch(API_URL, { cache: "no-store" });
+      const res = await fetch(API_URL);
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "load_failed");
 
-      writeLocalCache(data.records);
-      applyRecords(data.records, {
-        keepCurrentEvent: hasUserSelectedEvent
+      RECORDS = { "10km": [], "하프": [], "풀": [] };
+      data.records.forEach(r => {
+        if (!RECORDS[r.event]) RECORDS[r.event] = [];
+        RECORDS[r.event].push(r);
       });
+
+      // 기록이 가장 많이 등록된 종목을 먼저 보여줍니다.
+      const busiestEvent = EVENTS.reduce((best, e) =>
+        RECORDS[e].length > RECORDS[best].length ? e : best
+      , EVENTS[0]);
+
+      render(busiestEvent);
     } catch (err) {
-      // 직전 랭킹이 이미 화면에 있다면 네트워크 오류가 나도 그 화면을 유지합니다.
-      if (!hasCachedScreen) {
-        listEl.innerHTML = '<div class="empty">기록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</div>';
-      }
+      listEl.innerHTML = '<div class="empty">기록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</div>';
     }
   }
 
-  renderTabs();
-
-  // 이전에 방문한 브라우저라면 직전 랭킹을 먼저 즉시 표시합니다.
-  const cachedRecords = readLocalCache();
-  if (cachedRecords) {
-    applyRecords(cachedRecords);
-  }
-
-  // 동시에 서버의 최신 기록을 뒤에서 가져와 화면과 브라우저 캐시를 갱신합니다.
-  loadRecords({ hasCachedScreen: !!cachedRecords });
+  loadRecords();
 </script>
 </body>
 </html>
