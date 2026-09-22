@@ -108,7 +108,7 @@
       const newUntilMs = r.newUntil ? Date.parse(r.newUntil) : NaN;
       const isNew = Number.isFinite(newUntilMs) && Date.now() < newUntilMs;
       const newBadge = isNew
-        ? '<span class="new-badge" title="최근 기록 갱신">NEW</span>'
+        ? '<span class="new-badge" title="최근 기록 갱신">New Record</span>'
         : "";
 
       return `
