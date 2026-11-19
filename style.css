@@ -485,13 +485,9 @@ header .sub {
 
 .new-badge,
 .new-entry-badge {
-  position: relative;
   display: inline-block;
-  overflow: hidden;
-
   margin-left: 7px;
   padding: 2px 6px;
-
   border-radius: 6px;
 
   font-size: 9px;
@@ -499,9 +495,14 @@ header .sub {
   line-height: 1.2;
   letter-spacing: 0.6px;
   vertical-align: 2px;
+
+  background-size: 220% 100%;
+  animation:
+    badgeShimmer 1.8s linear infinite,
+    badgeGlow 1.4s ease-in-out infinite alternate;
 }
 
-/* NEW RECORD: 기존 오렌지-골드 디자인 그대로 */
+/* NEW RECORD: 예전 오렌지-골드 버전 */
 .new-badge {
   border: 1px solid rgba(255, 209, 102, 0.55);
 
@@ -516,12 +517,16 @@ header .sub {
 
   color: #fff7d6;
 
+  --badge-glow-a: rgba(255, 107, 61, 0.22);
+  --badge-glow-b: rgba(255, 107, 61, 0.55);
+  --badge-glow-c: rgba(255, 209, 102, 0.24);
+
   box-shadow:
     0 0 6px rgba(255, 107, 61, 0.28),
     0 0 10px rgba(255, 209, 102, 0.16);
 }
 
-/* NEW ENTRY: 신규 진입을 구분하기 위한 블루-민트 디자인 */
+/* NEW ENTRY: 같은 느낌의 블루-민트 버전 */
 .new-entry-badge {
   border: 1px solid rgba(111, 232, 224, 0.55);
 
@@ -536,57 +541,34 @@ header .sub {
 
   color: #ecffff;
 
+  --badge-glow-a: rgba(54, 124, 245, 0.22);
+  --badge-glow-b: rgba(54, 124, 245, 0.52);
+  --badge-glow-c: rgba(111, 232, 224, 0.24);
+
   box-shadow:
-    0 0 6px rgba(54, 124, 245, 0.25),
-    0 0 10px rgba(111, 232, 224, 0.15);
+    0 0 6px rgba(54, 124, 245, 0.26),
+    0 0 10px rgba(111, 232, 224, 0.16);
 }
 
-/* 뱃지 전체는 고정하고, 빛만 약 3초마다 한 번 지나갑니다. */
-.new-badge::after,
-.new-entry-badge::after {
-  content: "";
-  position: absolute;
-  top: -45%;
-  left: -45%;
-  width: 28%;
-  height: 190%;
-
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.78),
-    transparent
-  );
-
-  transform: skewX(-20deg);
-  animation: newBadgeShine 3.2s ease-in-out infinite;
-  pointer-events: none;
+@keyframes badgeShimmer {
+  from { background-position: 120% 0; }
+  to   { background-position: -120% 0; }
 }
 
-@keyframes newBadgeShine {
-  0%, 72% {
-    left: -45%;
-    opacity: 0;
+@keyframes badgeGlow {
+  from {
+    box-shadow: 0 0 4px var(--badge-glow-a);
   }
-
-  76% {
-    opacity: 1;
-  }
-
-  92% {
-    left: 120%;
-    opacity: 1;
-  }
-
-  100% {
-    left: 120%;
-    opacity: 0;
+  to {
+    box-shadow:
+      0 0 8px var(--badge-glow-b),
+      0 0 13px var(--badge-glow-c);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .new-badge::after,
-  .new-entry-badge::after {
+  .new-badge,
+  .new-entry-badge {
     animation: none;
   }
 }
