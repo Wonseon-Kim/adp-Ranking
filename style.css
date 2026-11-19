@@ -483,7 +483,8 @@ header .sub {
 
 /* ---- Recent PB / record update badge ---- */
 
-.new-badge {
+.new-badge,
+.new-entry-badge {
   position: relative;
   display: inline-block;
   overflow: hidden;
@@ -491,10 +492,19 @@ header .sub {
   margin-left: 7px;
   padding: 2px 6px;
 
-  border: 1px solid rgba(255, 209, 102, 0.55);
   border-radius: 6px;
 
-  /* 초기 버전의 오렌지-골드 그라데이션 디자인 유지 */
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.6px;
+  vertical-align: 2px;
+}
+
+/* NEW RECORD: 기존 오렌지-골드 디자인 그대로 */
+.new-badge {
+  border: 1px solid rgba(255, 209, 102, 0.55);
+
   background: linear-gradient(
     110deg,
     #ff6b3d 0%,
@@ -505,19 +515,35 @@ header .sub {
   );
 
   color: #fff7d6;
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: 0.6px;
-  vertical-align: 2px;
 
   box-shadow:
     0 0 6px rgba(255, 107, 61, 0.28),
     0 0 10px rgba(255, 209, 102, 0.16);
 }
 
+/* NEW ENTRY: 신규 진입을 구분하기 위한 블루-민트 디자인 */
+.new-entry-badge {
+  border: 1px solid rgba(111, 232, 224, 0.55);
+
+  background: linear-gradient(
+    110deg,
+    #367cf5 0%,
+    #4fa9f8 30%,
+    #6fe8e0 50%,
+    #4fa9f8 70%,
+    #367cf5 100%
+  );
+
+  color: #ecffff;
+
+  box-shadow:
+    0 0 6px rgba(54, 124, 245, 0.25),
+    0 0 10px rgba(111, 232, 224, 0.15);
+}
+
 /* 뱃지 전체는 고정하고, 빛만 약 3초마다 한 번 지나갑니다. */
-.new-badge::after {
+.new-badge::after,
+.new-entry-badge::after {
   content: "";
   position: absolute;
   top: -45%;
@@ -559,7 +585,8 @@ header .sub {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .new-badge::after {
+  .new-badge::after,
+  .new-entry-badge::after {
     animation: none;
   }
 }
